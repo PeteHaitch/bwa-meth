@@ -23,12 +23,12 @@ install_requires = ['toolshed']
 if sys.version_info[:2] < (2, 7):
     install_requires.extend(["argparse", "ordereddict"])
 
-setup(name='bwameth',
-      version=get_version("bwameth.py"),
-      description="align BS-Seq reads with bwa mem",
-      py_modules=['bwameth'],
-      author="Brent Pedersen",
-      author_email="bpederse@gmail.com",
+setup(name='bwaparclip',
+      version=get_version("bwaparclip.py"),
+      description="align PAR-CLIP reads with bwa mem",
+      py_modules=['bwaparclip'],
+      author="Peter Hickey",
+      author_email="peter.hickey@gmail.com",
       license="MIT",
       install_requires=install_requires,
       long_description=open('README.md').read(),
@@ -37,5 +37,5 @@ setup(name='bwameth',
       'Programming Language :: Python :: 2',
       'Programming Language :: Python :: 3'
       ],
-      scripts=['bwameth.py']
+      scripts=['bwaparclip.py']
 )

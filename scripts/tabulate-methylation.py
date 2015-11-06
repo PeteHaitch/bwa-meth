@@ -21,7 +21,7 @@ def faseq(fa, chrom, start, end, cache=[None]):
 def get_context(seq5, forward):
     """
     >>> get_context('GACGG', True)
-    'CG+'                  
+    'CG+'
     """
     try:
         if forward:
@@ -39,8 +39,10 @@ def get_context(seq5, forward):
 
 def tabulate_main(args):
     __doc__ = """
+    WARNING: Not adapted for PAR-CLIP
     tabulate methylation from bwa-meth.py call
     """
+    sys.exit("ERROR: Bis-SNP tabulation not adapted for PAR-CLIP.")
     p = argparse.ArgumentParser(__doc__)
     p.add_argument("--reference", help="reference fasta", required=True)
     p.add_argument("--region", help="specific region in which to run mpileup",

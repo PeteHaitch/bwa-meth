@@ -15,7 +15,7 @@ from __future__ import print_function
 from __future__ import division
 import itertools as it
 from operator import itemgetter
-from bwameth import Bam
+from bwaparclip import Bam
 import sys
 
 line_iter = (x.rstrip("\r\n").split("\t") for x in sys.stdin)
@@ -39,11 +39,7 @@ for g, pair in it.groupby(line_iter, itemgetter(0)):
         print(str(right))
         continue
 
-    # there is overlap 
+    # there is overlap
     # L ------------------>
     # R              <------------------
     ovl_bases = right.pos, left.pos + left.tlen
-
-
-
-

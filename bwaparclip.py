@@ -1,15 +1,18 @@
 #!/usr/bin/env python
 """
-map bisulfite converted reads to an insilico converted genome using bwa mem.
+map PAR-CLIP reads to an insilico converted genome using bwa mem. bwaparclip is
+an experimental a hack based on bwameth (https://github.com/brentp/bwa-meth/).
+WARNING: PAR-CLIP sequences RNA but bwaparclip treats it as DNA, e.g. no
+spliced alignemnt. Like I said, it's a hack.
 A command to this program like:
 
-    python bwameth.py --reference ref.fa A.fq B.fq
+    python bwaparclip.py --reference ref.fa A.fq B.fq
 
 Gets converted to:
 
-    bwa mem -pCMR ref.fa.bwameth.c2t '<python bwameth.py c2t A.fq B.fq'
+    bwa mem -pCMR ref.fa.bwaparclip.t2c '<python bwaparclip.py t2c A.fq B.fq'
 
-So that A.fq has C's converted to T's and B.fq has G's converted to A's
+So that A.fq has T's converted to C's and B.fq has A's converted to G's
 and both are streamed directly to the aligner without a temporary file.
 The output is a corrected, sorted, indexed BAM.
 """
@@ -33,7 +36,7 @@ except ImportError: # python3
     maketrans = str.maketrans
 from toolshed import nopen, reader, is_newer_b
 
-__version__ = "0.10"
+__version__ = "0.0.9000"
 
 def checkX(cmd):
     for p in os.environ['PATH'].split(":"):
@@ -45,7 +48,7 @@ def checkX(cmd):
 checkX('samtools')
 checkX('bwa')
 
-class BWAMethException(Exception): pass
+class bwaparclipException(Exception): pass
 
 def comp(s, _comp=maketrans('ATCG', 'TAGC')):
     return s.translate(_comp)
@@ -75,7 +78,7 @@ def convert_reads(fq1s, fq2s, out=sys.stdout):
             fq2 = nopen(fq2)
             q2_iter = izip(*[fq2] * 4)
         else:
-            sys.stderr.write("WARNING: running bwameth in single-end mode\n")
+            sys.stderr.write("WARNING: running bwaparclip in single-end mode\n")
             q2_iter = repeat((None, None, None, None))
         q1_iter = izip(*[fq1] * 4)
 
@@ -93,7 +96,7 @@ def convert_reads(fq1s, fq2s, out=sys.stdout):
                 if len(seq) < 80:
                     lt80 += 1
 
-                char_a, char_b = ['CT', 'GA'][read_i]
+                char_a, char_b = ['TC', 'AG'][read_i]
                 # keep original sequence as name.
                 name = " ".join((name,
                                 "YS:Z:" + seq +
@@ -104,15 +107,16 @@ def convert_reads(fq1s, fq2s, out=sys.stdout):
     out.flush()
     out.close()
     if lt80 > 50:
+        # TODO: How long are Tash's reads?
         sys.stderr.write("WARNING: %i reads with length < 80\n" % lt80)
         sys.stderr.write("       : this program is designed for long reads\n")
 
 
 def convert_fasta(ref_fasta, just_name=False):
-    out_fa = ref_fasta + ".bwameth.c2t"
+    out_fa = ref_fasta + ".bwaparclip.t2c"
     if just_name:
         return out_fa
-    msg = "c2t in %s to %s" % (ref_fasta, out_fa)
+    msg = "t2c in %s to %s" % (ref_fasta, out_fa)
     if is_newer_b(ref_fasta, out_fa):
         sys.stderr.write("already converted: %s\n" % msg)
         return out_fa
@@ -129,12 +133,12 @@ def convert_fasta(ref_fasta, just_name=False):
             #    for line in wrap(seq):
             #        print >>fh, line
             #else:
-            for line in wrap(seq.replace("G", "A")):
+            for line in wrap(seq.replace("A", "G")):
                 fh.write(line + '\n')
 
             ########### Forward ######################
             fh.write(">f%s\n" % header)
-            for line in wrap(seq.replace("C", "T")):
+            for line in wrap(seq.replace("T", "C")):
                 fh.write(line + '\n')
         fh.close()
     except:
@@ -226,7 +230,7 @@ class Bam(object):
         return next(x for x in self.other if x.startswith("YS:Z:"))[5:]
 
     @property
-    def ga_ct(self):
+    def ag_tc(self):
         return [x for x in self.other if x.startswith("YC:Z:")]
 
     def longest_match(self, patt=re.compile("\d+M")):
@@ -243,11 +247,11 @@ def rname(fq1, fq2=""):
     return "".join(a for a, b in zip(name(fq1), name(fq2)) if a == b) or 'bm'
 
 
-def bwa_mem(fa, mfq, extra_args, prefix='bwa-meth', threads=1, rg=None,
+def bwa_mem(fa, mfq, extra_args, prefix='bwa-parclip', threads=1, rg=None,
             calmd=False, paired=True, set_as_failed=None):
     conv_fa = convert_fasta(fa, just_name=True)
     if not is_newer_b(conv_fa, (conv_fa + '.amb', conv_fa + '.sa')):
-        raise BWAMethException("first run bwameth.py index %s" % fa)
+        raise bwaparclipException("first run bwaparclip.py index %s" % fa)
 
     if not rg is None and not rg.startswith('@RG'):
         rg = '@RG\tID:{rg}\tSM:{rg}'.format(rg=rg)
@@ -320,7 +324,7 @@ def handle_header(toks, out):
         toks = ["%s\tSN:%s\t%s" % (sq, chrom, ln)]
     if toks[0].startswith("@PG"):
         #out.write("\t".join(toks) + "\n")
-        toks = ["@PG\tID:bwa-meth\tPN:bwa-meth\tVN:%s\tCL:\"%s\"" % (
+        toks = ["@PG\tID:bwa-parclip\tPN:bwa-parclip\tVN:%s\tCL:\"%s\"" % (
                          __version__,
                          " ".join(x.replace("\t", "\\t") for x in sys.argv))]
     out.write("\t".join(toks) + "\n")
@@ -377,8 +381,10 @@ def handle_reads(alns, set_as_failed):
 
 def cnvs_main(args):
     __doc__ = """
+    WARNING: Not adapted for PAR-CLIP.
     calculate CNVs from BS-Seq bams or vcfs
     """
+    sys.exit("ERROR: CNV calling is not adapted for PAR-CLIP data.")
     p = argparse.ArgumentParser(__doc__)
     p.add_argument("--regions", help="optional target regions", default='NA')
     p.add_argument("bams", nargs="+")
@@ -417,8 +423,10 @@ write.table(df, row.names=FALSE, quote=FALSE, sep="\t")
 
 def tabulate_main(args):
     __doc__ = """
-    tabulate methylation from bwameth.py call
+    WARNING: Not adapted for PAR-CLIP
+    tabulate methylation from bwaparclip.py call
     """
+    sys.exit("ERROR: Bis-SNP tabulation not adapted for PAR-CLIP.")
     p = argparse.ArgumentParser(__doc__)
     p.add_argument("--reference", help="reference fasta")
     p.add_argument("-t", "--threads", type=int, default=3)
@@ -547,9 +555,10 @@ def tabulate_main(args):
     with open(a.prefix + "command.sh", 'w') as fh:
         fh.write(cmd)
 
+# UP TO HERE
 def convert_fqs(fqs):
     script = __file__
-    return "'<%s %s c2t %s %s'" % (sys.executable, script, fqs[0],
+    return "'<%s %s t2c %s %s'" % (sys.executable, script, fqs[0],
                fqs[1] if len(fqs) > 1
                       else ','.join(['NA'] * len(fqs[0].split(","))))
 
@@ -559,7 +568,7 @@ def main(args=sys.argv[1:]):
         assert len(args) == 2, ("must specify fasta as 2nd argument")
         sys.exit(bwa_index(convert_fasta(args[1])))
 
-    if len(args) > 0 and args[0] == "c2t":
+    if len(args) > 0 and args[0] == "t2c":
         sys.exit(convert_reads(args[1], args[2]))
 
     if len(args) > 0 and args[0] == "tabulate":
@@ -571,11 +580,12 @@ def main(args=sys.argv[1:]):
     p = argparse.ArgumentParser(__doc__)
     p.add_argument("--reference", help="reference fasta", required=True)
     p.add_argument("-t", "--threads", type=int, default=6)
-    p.add_argument("-p", "--prefix", default="bwa-meth")
+    p.add_argument("-p", "--prefix", default="bwa-parclip")
     p.add_argument("--calmd", default=False, action="store_true")
     p.add_argument("--read-group", help="read-group to add to bam in same"
             " format as to bwa: '@RG\\tID:foo\\tSM:bar'")
-    p.add_argument('--set-as-failed', help="flag alignments to this strand"
+    p.add_argument('--set-as-failed', help="WARNING: Not well-defined for"
+            " PAR-CLIP libraries. Flag alignments to this strand"
             " as not passing QC (0x200). Targetted BS-Seq libraries are often"
             " to a single strand, so we can flag them as QC failures. Note"
             " f == OT, r == OB. Likely, this will be 'f' as we will expect"
@@ -583,12 +593,12 @@ def main(args=sys.argv[1:]):
             " as failed those aligning to the forward, or original top (OT).",
         default=None, choices=('f', 'r'))
 
-    p.add_argument("fastqs", nargs="+", help="bs-seq fastqs to align. Run"
+    p.add_argument("fastqs", nargs="+", help="PAR-CLIP fastqs to align. Run"
             "multiple sets separated by commas, e.g. ... a_R1.fastq,b_R1.fastq"
             " a_R2.fastq,b_R2.fastq note that the order must be maintained.")
 
     args = p.parse_args(args)
-    # for the 2nd file. use G => A and bwa's support for streaming.
+    # for the 2nd file. use A => G and bwa's support for streaming.
     conv_fqs_cmd = convert_fqs(args.fastqs)
 
     bwa_mem(args.reference, conv_fqs_cmd, "", prefix=args.prefix,
